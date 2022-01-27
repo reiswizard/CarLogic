@@ -175,7 +175,12 @@ def compute_steering_angle(lane_lines):
     angle_to_mid_radian = math.atan(x_offset / y_offset)  # angle (in radian) to center vertical line
     angle_to_mid_deg = int(angle_to_mid_radian * 180.0 / math.pi)  # angle (in degrees) to center vertical line
 
-    return angle_to_mid_deg
+    if angle_to_mid_deg < -35:
+        return -35
+    elif angle_to_mid_deg > 35:
+        return 35
+    else:
+        return angle_to_mid_deg
 
 
 ############################
@@ -248,7 +253,7 @@ def test_photo(file):
 
     t2 = time.time()
     print(t2 - t1)
-    print(lines)
+    # print(lines)
     print(number_of_white_pix)
     print(lanes)
     print(steering_angle)
@@ -261,4 +266,4 @@ def test_photo(file):
 # test main
 ############################
 if __name__ == '__main__':
-    test_photo('test_pic2/image_005_090.png')
+    test_photo('test_pic/image_005_090.png')
