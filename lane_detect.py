@@ -251,6 +251,10 @@ def test_photo(file):
     cv2.imshow("Lane Lines", lane_lines_img)
     cv2.imshow("Heading", heading_line_img)
 
+    # hori = np.concatenate((frame, interest), axis=1)
+    cv2.imwrite('ori.jpg', frame)
+    cv2.imwrite('interest.jpg', interest)
+
     t2 = time.time()
     print(t2 - t1)
     # print(lines)
