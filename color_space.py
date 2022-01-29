@@ -51,23 +51,23 @@ image = cv2.imread('test_pic/image_005_090.png')
 # cv2.imshow('Re-RGB', out)
 
 ##########
-ddepth = cv2.CV_16S
-kernel_size = 3
-
-cv2.imshow('Original', image)
-img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-img_blur = cv2.GaussianBlur(img_gray, (3, 3), 0)
-sobelxy = cv2.Sobel(src=img_gray, ddepth=cv2.CV_64F, dx=1, dy=1, ksize=5)
-cv2.imshow('Sobel X', sobelxy)
-
-canny = cv2.Canny(img_gray, 0, 80)
-cv2.imshow('Canny', canny)
-
-laplace = cv2.Laplacian(img_gray, cv2.CV_64F)
-cv2.imshow('Laplace', laplace)
-
-slc = np.concatenate((sobelxy, laplace, canny), axis=1)
-cv2.imwrite('Sobel-Laplace-Canny.png', slc)
-cv2.imshow('Sobel-Laplace-Canny', slc)
+# ddepth = cv2.CV_16S
+# kernel_size = 3
+#
+# cv2.imshow('Original', image)
+# img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+# img_blur = cv2.GaussianBlur(img_gray, (3, 3), 0)
+# sobelxy = cv2.Sobel(src=img_gray, ddepth=cv2.CV_64F, dx=1, dy=1, ksize=5)
+# cv2.imshow('Sobel X', sobelxy)
+#
+# canny = cv2.Canny(img_gray, 0, 80)
+# cv2.imshow('Canny', canny)
+#
+# laplace = cv2.Laplacian(img_gray, cv2.CV_64F)
+# cv2.imshow('Laplace', laplace)
+#
+# slc = np.concatenate((sobelxy, laplace, canny), axis=1)
+# cv2.imwrite('Sobel-Laplace-Canny.png', slc)
+# cv2.imshow('Sobel-Laplace-Canny', slc)
 
 cv2.waitKey(0)

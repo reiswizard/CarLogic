@@ -18,7 +18,9 @@ perspective_trapezoid = None
 def detect_lane(img):
     color = detect_color(img)
     interest = region_of_interest(color)
-    perspective = perspective_correction(interest)
+
+    # perspective = perspective_correction(interest)
+
     edge = detect_edge(interest)
     lines_elements = detect_line(edge)
     lanes = average_slope_intercept(edge, lines_elements)
@@ -39,6 +41,24 @@ def detect_color(img):
     upper_green = np.array([80, 255, 255])
 
     return cv2.inRange(hsv, lower_green, upper_green)
+
+
+def detect_green(img):
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    # color to detect range and masking
+    lower_green = np.array([60, 160, 0])
+    upper_green = np.array([80, 255, 255])
+
+    return cv2.inRange(hsv, lower_green, upper_green)
+
+
+def detect_yellow(img):
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    # color to detect range and masking
+    lower_yellow = np.array([20, 100, 100])
+    upper_yellow = np.array([50, 255, 255])
+
+    return cv2.inRange(hsv, lower_yellow, upper_yellow)
 
 
 # take out zone of no interest
@@ -142,6 +162,7 @@ def make_points(line):
     # bound the coordinates within the frame
     x1 = max(-width, min(2 * width, int((y1 - intercept) / slope)))
     x2 = max(-width, min(2 * width, int((y2 - intercept) / slope)))
+
     return [[x1, y1, x2, y2]]
 
 
@@ -191,7 +212,7 @@ def show_image(title, img, show=_SHOW_IMAGE):
         cv2.imshow(title, img)
 
 
-def display_lines(frame, lines, line_color=(0, 255, 0), line_width=5):
+def display_lines(frame, lines, line_color=(255, 0, 0), line_width=5):
     line_image = np.zeros_like(frame)
     if lines is not None:
         for line in lines:
@@ -201,7 +222,7 @@ def display_lines(frame, lines, line_color=(0, 255, 0), line_width=5):
     return line_image
 
 
-def display_heading_line(img, steering_angle, line_color=(0, 0, 255), line_width=5):
+def display_heading_line(img, steering_angle, line_color=(255, 0, 0), line_width=5):
     heading_image = np.zeros_like(img)
     width = 640
     height = 480
@@ -212,7 +233,7 @@ def display_heading_line(img, steering_angle, line_color=(0, 0, 255), line_width
     x2 = int(x1 - height / 2 / math.tan(steering_angle_radian))
     y2 = int(height / 2)
 
-    cv2.line(heading_image, (x1, y1), (x2, y2), line_color, line_width)
+    cv2.line(heading_image, (x1, y1-100), (x2, y2-100), line_color, line_width)
     heading_image = cv2.addWeighted(img, 0.8, heading_image, 1, 1)
 
     return heading_image
@@ -225,24 +246,49 @@ def test_photo(file):
     t1 = time.time()
 
     frame = cv2.imread(file)
-    color = detect_color(frame)
+    color = detect_green(frame)
     interest = region_of_interest(color)
-    edge = detect_edge(interest)
-    lines = detect_line(edge)
-
     number_of_white_pix = np.sum(interest == 255)
 
-    # if number_of_white_pix > 1000:
-    #     print('green')
-    # else:
-    #     print('blau')
-
+    edge = detect_edge(interest)
+    lines = detect_line(edge)
     lanes = average_slope_intercept(lines)
 
     steering_angle = compute_steering_angle(lanes)
 
-    lane_lines_img = display_lines(frame, lines)
+    lane_lines_img = display_lines(frame, lanes)
     heading_line_img = display_heading_line(lane_lines_img, steering_angle, line_color=(0, 0, 255), line_width=5)
+
+    #########################
+    # if np.sum(interest == 255) > 1000:
+    #     edge = detect_edge(interest)
+    #     lines = detect_line(edge)
+    #     lanes = average_slope_intercept(lines)
+    #
+    #     steering_angle = compute_steering_angle(lanes)
+    #
+    #     lane_lines_img = display_lines(frame, lines)
+    #     heading_line_img = display_heading_line(lane_lines_img, steering_angle, line_color=(0, 0, 255), line_width=5)
+    # else:
+    #     color = detect_green(frame)
+    #     interest = region_of_interest(color)
+    #     number_of_white_pix = np.sum(interest == 255)
+    #     edge = detect_edge(interest)
+    #     lines = detect_line(edge)
+    #     lanes = average_slope_intercept(lines)
+    #
+    #     steering_angle = compute_steering_angle(lanes)
+    #
+    #     lane_lines_img = display_lines(frame, lines)
+    #     heading_line_img = display_heading_line(lane_lines_img, steering_angle, line_color=(255, 0, 0), line_width=5)
+    #     print('none')
+
+    ##########################
+    # lanes = average_slope_intercept(detect_line(detect_edge(region_of_interest(detect_green(cv2.imread(file))))))
+    # steering_angle = compute_steering_angle(lanes)
+
+    # lane_lines_img = display_lines(frame, lines)
+    # heading_line_img = display_heading_line(lane_lines_img, steering_angle, line_color=(0, 0, 255), line_width=5)
 
     show_image('Original', frame, True)
     show_image('Color Selection', color, True)
@@ -251,16 +297,16 @@ def test_photo(file):
     cv2.imshow("Lane Lines", lane_lines_img)
     cv2.imshow("Heading", heading_line_img)
 
-    # hori = np.concatenate((frame, interest), axis=1)
-    cv2.imwrite('ori.jpg', frame)
-    cv2.imwrite('interest.jpg', interest)
-
     t2 = time.time()
     print(t2 - t1)
     # print(lines)
     print(number_of_white_pix)
     print(lanes)
     print(steering_angle)
+
+    # hori = np.concatenate((frame, interest), axis=1)
+    # cv2.imwrite('ori.jpg', frame)
+    # cv2.imwrite('interest.jpg', interest)
 
     cv2.waitKey(0)
     cv2.destroyAllWindows()
