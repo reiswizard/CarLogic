@@ -110,7 +110,6 @@ def detect_line(img):
 
 
 def average_slope_intercept(line_segments):
-    print(line_segments)
     lane_lines = []
     if line_segments is None:
         logging.info('No line_segment segments detected')
@@ -149,8 +148,6 @@ def average_slope_intercept(line_segments):
     if len(right_fit) > 0:
         lane_lines.append(make_points(right_fit_average))
 
-    # print('lane lines: %s' % lane_lines)  # [[[316, 720, 484, 432]], [[1009, 720, 718, 432]]]
-
     return lane_lines
 
 
@@ -181,10 +178,11 @@ def compute_steering_angle(lane_lines):
 
     # find the steering angle, which is angle between navigation direction to end of center line
     # höhere Wert für bessere Stabilität
-    y_offset = int(height * 4/4)
+    y_offset = int(height * 6/4)
 
     angle_to_mid_radian = math.atan(x_offset / y_offset)  # angle (in radian) to center vertical line
     angle_to_mid_deg = int(math.degrees(angle_to_mid_radian))
+    print(x_offset)
 
     if angle_to_mid_deg < -35:
         return -35
@@ -210,12 +208,69 @@ def stabilize_steering_angle(curr_steering_angle, new_steering_angle, num_of_lan
 
     angle_deviation = new_steering_angle - curr_steering_angle
     if abs(angle_deviation) > max_angle_deviation:
-        stabilized_steering_angle = int(curr_steering_angle + max_angle_deviation * angle_deviation / abs(angle_deviation))
+        stabilized_steering_angle = int(curr_steering_angle +
+                                        max_angle_deviation * angle_deviation / abs(angle_deviation))
     else:
         stabilized_steering_angle = new_steering_angle
     logging.info('Proposed angle: %s, stabilized angle: %s' % (new_steering_angle, stabilized_steering_angle))
 
     return stabilized_steering_angle
+
+
+#################
+# test
+#################
+def angle_slope(line_segments):
+    lane_lines = []
+    if line_segments is None:
+        logging.info('No line_segment segments detected')
+        return lane_lines
+
+    width = 640
+    height = 480
+
+    left_fit = []
+    right_fit = []
+
+    boundary = 1 / 3
+    left_region_boundary = width * (1 - boundary)  # left lane line segment should be on left 2/3 of the screen
+    right_region_boundary = width * boundary  # right lane line segment should be on left 2/3 of the screen
+
+    for line_segment in line_segments:
+        for x1, y1, x2, y2 in line_segment:
+            if x1 == x2:
+                logging.info('skipping vertical line segment (slope=inf): %s' % line_segment)
+                continue
+            fit = np.polyfit((x1, x2), (y1, y2), 1)
+            slope = fit[0]
+            intercept = fit[1]
+            if slope < 0:
+                if x1 < left_region_boundary and x2 < left_region_boundary:
+                    left_fit.append((slope, intercept))
+            else:
+                if x1 > right_region_boundary and x2 > right_region_boundary:
+                    right_fit.append((slope, intercept))
+
+    left_fit_average = np.average(left_fit, axis=0)
+    if len(left_fit) > 0:
+        angle_a = math.degrees(math.atan(left_fit_average[0]))
+    else:
+        angle_a = 0
+
+    right_fit_average = np.average(right_fit, axis=0)
+
+    if len(right_fit) > 0:
+        angle_b = math.degrees(math.atan(right_fit_average[0]))
+    else:
+        angle_b = 0
+
+    angle_new = int((angle_b + angle_a) * -6/10)
+    if angle_new < -35:
+        return -35
+    elif angle_new > 35:
+        return 35
+    else:
+        return angle_new
 
 
 ############################
@@ -263,8 +318,7 @@ def make_points(line):
     # bound the coordinates within the frame
     x1 = max(-width, min(2 * width, int((y1 - intercept) / slope)))
     x2 = max(-width, min(2 * width, int((y2 - intercept) / slope)))
-
-    print(x1, x2)
+    print(x1, y1, x2, y2)
 
     return [[x1, y1, x2, y2]]
 
@@ -285,6 +339,7 @@ def test_photo(file):
     lanes = average_slope_intercept(lines)
 
     steering_angle = compute_steering_angle(lanes)
+    # steering_angle = angle(lines)
 
     lane_lines_img = display_lines(frame, lines)
     heading_line_img = display_heading_line(lane_lines_img, steering_angle, line_color=(0, 0, 255), line_width=5)
@@ -328,11 +383,11 @@ def test_photo(file):
     cv2.imshow("Heading", heading_line_img)
 
     t2 = time.time()
-    print(t2 - t1)
+    # print(t2 - t1)
     # print(lines)
-    print(number_of_white_pix)
-    print(lanes)
-    print(steering_angle)
+    # print(number_of_white_pix)
+    # print(lanes)
+    # print(steering_angle)
 
     # hori = np.concatenate((frame, interest), axis=1)
     # cv2.imwrite('ori.jpg', frame)
@@ -367,8 +422,13 @@ def test_video(video_file):
             edge = detect_edge(interest)
             lines = detect_line(edge)
             lanes = average_slope_intercept(lines)
+
             new_steering_angle = compute_steering_angle(lanes)
-            stabilized_steering_angle = stabilize_steering_angle(current_steering_anglex, new_steering_angle, len(lanes))
+            # new_steering_angle = angle(lines)
+            print(new_steering_angle)
+
+            stabilized_steering_angle = stabilize_steering_angle(current_steering_anglex,
+                                                                 new_steering_angle, len(lanes))
             current_steering_anglex = stabilized_steering_angle
 
             lane_lines_img = display_lines(frame, lines)
@@ -398,5 +458,5 @@ def test_video(video_file):
 # test main
 ############################
 if __name__ == '__main__':
-    test_photo('test_pic3/image_802_090.png')
-    # test_video('filename.avi')
+    # test_photo('test_pic3/image_121_090.png')
+    test_video('filename.avi')
