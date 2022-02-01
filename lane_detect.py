@@ -22,30 +22,65 @@ class PiCar(object):
         self.yellow_line = np.array([[20, 100, 100], [50, 255, 255]])
         self.white_line = np.array([[0, 0, 170], [180, 190, 255]])
 
-    def drive(self, frame):
+    def drive(self, video_file):
+        ######
+        # function for tracking
+        file = open("time.txt", "w")
+        ######
         cap = cv2.VideoCapture(video_file)
+        # cap = cv2.VideoCapture(0)
+        # cap.set(3, 640)
+        # cap.set(4, 480)
 
+        # skip first second of video.
+        for i in range(3):
+            _, frame = cap.read()
+
+        # video recording
+        video_type = cv2.VideoWriter_fourcc(*'XVID')
+        video_overlay = cv2.VideoWriter("%s_overlay.avi" % cap, video_type, 20.0, (640, 480))
+
+        try:
+            i = 0
+            while cap.isOpened():
+                _, frame = cap.read()
+                t1 = time.time()  # for performance recording
+
+                color = detect_color(frame, car.white_line, car.green_line)
+                interest = region_of_interest(color)
+                edge = detect_edge(interest)
+                lines = detect_line(edge)
+                lanes = average_slope_intercept(lines)
+
+                new_steering_angle = compute_steering_angle(lanes)
+                stabilized_steering_angle = stabilize_steering_angle(car.current_steering_angle,
+                                                                     new_steering_angle, len(lanes))
+                car.current_steering_angle = stabilized_steering_angle
+                t2 = time.time()  # end processing time
+
+                cv2.imshow("Color Filtered", color)
+                cv2.imshow("Edge Detection", edge)
+                lane_lines_img = display_lines(frame, lines)
+                heading_line_img = display_heading_line(lane_lines_img, car.current_steering_angle,
+                                                        line_color=(0, 0, 255),
+                                                        line_width=5)
+                video_overlay.write(heading_line_img)
+                cv2.imshow("Road with Lane line", heading_line_img)
+                string_value_time = str(t2 - t1)
+                file.write(string_value_time + "\n")
+                i += 1
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+        finally:
+            cap.release()
+            video_overlay.release()
+            cv2.destroyAllWindows()
         return 0
 
 
 ############################
 # logic actuel
 ############################
-# detection lane
-def detect_lane(img):
-
-    color = detect_color(img)
-    interest = region_of_interest(color)
-
-    # perspective = perspective_correction(interest)
-
-    edge = detect_edge(interest)
-    lines_elements = detect_line(edge)
-    lanes = average_slope_intercept(edge, lines_elements)
-
-    return lanes
-
-
 # marking all edges
 def detect_edge(img):
     return cv2.Canny(img, 200, 400)
@@ -133,17 +168,6 @@ def region_of_interest(img):
 
     return cv2.bitwise_and(img, mask)
 
-
-# perspective correction
-def perspective_correction(img):
-    src_pts = np.array([[180, 105],  # top left
-                        [460, 105],  # top right
-                        [640, 220],  # bottom right
-                        [0, 220]],  # bottom left
-                       dtype=np.float32)
-    dst_pts = np.array([[0, 0], [640, 0], [640, 115], [0, 115]], dtype=np.float32)
-    perspective = cv2.getPerspectiveTransform(src_pts, dst_pts)
-    return cv2.warpPerspective(img, perspective, (640, 115), flags=cv2.INTER_LANCZOS4)
 
 
 # detect lane segments
@@ -390,6 +414,18 @@ def steering_angle_funtion(lane_lines):
 #     cv2.fillPoly(mask, polygon, 255)
 #
 #     return cv2.bitwise_and(img, mask)
+#
+#
+# perspective correction
+# def perspective_correction(img):
+#     src_pts = np.array([[180, 105],  # top left
+#                         [460, 105],  # top right
+#                         [640, 220],  # bottom right
+#                         [0, 220]],  # bottom left
+#                        dtype=np.float32)
+#     dst_pts = np.array([[0, 0], [640, 0], [640, 115], [0, 115]], dtype=np.float32)
+#     perspective = cv2.getPerspectiveTransform(src_pts, dst_pts)
+#     return cv2.warpPerspective(img, perspective, (640, 115), flags=cv2.INTER_LANCZOS4)
 
 ############################
 # no logic
@@ -534,6 +570,7 @@ def test_video(video_file):
             t1 = time.time()
 
             color = detect_color(frame, car.white_line, car.green_line)
+            cv2.imshow("Color", color)
             interest = region_of_interest(color)
             edge = detect_edge(interest)
             lines = detect_line(edge)
@@ -576,4 +613,5 @@ def test_video(video_file):
 if __name__ == '__main__':
     # test_photo('test_pic3/image_121_090.png')
     car = PiCar()
-    test_video('filename.avi')
+    # test_video('filename.avi')
+    car.drive('filename.avi')
