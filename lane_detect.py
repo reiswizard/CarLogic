@@ -7,10 +7,19 @@ import time
 import datetime
 import sys
 
-_SHOW_IMAGE = True
-test_img = cv2.imread('/test_pic/image_000_090.png')
-perspective_trapezoid = None
-current_steering_angle = 0
+
+_SHOW_IMAGE = False
+
+class PiCar(object):
+    def __init__(self, car=None):
+        logging.info('Creating a HandCodedLaneFollower...')
+        self.car = car
+        self.current_steering_angle = 0
+        self.speed = 0
+
+        # line color green
+        self.green_line = np.array([[60, 160, 0], [80, 255, 255]])
+        self.yellow_line = np.array([[20, 100, 100], [50, 255, 255]])
 
 
 ############################
@@ -18,6 +27,7 @@ current_steering_angle = 0
 ############################
 # detection lane
 def detect_lane(img):
+
     color = detect_color(img)
     interest = region_of_interest(color)
 
@@ -36,31 +46,31 @@ def detect_edge(img):
 
 
 # detect color
-def detect_color(img):
+def detect_color(img, color_range):
+    x1, x2, x3 = color_range[0]
+    y1, y2, y3 = color_range[1]
+    lower_range = np.array([x1, x2 ,x3])
+    upper_range = np.array([y1, y2, y3])
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    # color to detect range and masking
-    lower_green = np.array([60, 160, 0])
-    upper_green = np.array([80, 255, 255])
-
-    return cv2.inRange(hsv, lower_green, upper_green)
+    return cv2.inRange(hsv, lower_range, upper_range)
 
 
-def detect_green(img):
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    # color to detect range and masking
-    lower_green = np.array([60, 160, 0])
-    upper_green = np.array([80, 255, 255])
-
-    return cv2.inRange(hsv, lower_green, upper_green)
-
-
-def detect_yellow(img):
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    # color to detect range and masking
-    lower_yellow = np.array([20, 100, 100])
-    upper_yellow = np.array([50, 255, 255])
-
-    return cv2.inRange(hsv, lower_yellow, upper_yellow)
+# def detect_green(img):
+#     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+#     # color to detect range and masking
+#     lower_green = np.array([60, 160, 0])
+#     upper_green = np.array([80, 255, 255])
+#
+#     return cv2.inRange(hsv, lower_green, upper_green)
+#
+#
+# def detect_yellow(img):
+#     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+#     # color to detect range and masking
+#     lower_yellow = np.array([20, 100, 100])
+#     upper_yellow = np.array([50, 255, 255])
+#
+#     return cv2.inRange(hsv, lower_yellow, upper_yellow)
 
 
 # take out zone of no interest
@@ -182,7 +192,6 @@ def compute_steering_angle(lane_lines):
 
     angle_to_mid_radian = math.atan(x_offset / y_offset)  # angle (in radian) to center vertical line
     angle_to_mid_deg = int(math.degrees(angle_to_mid_radian))
-    print(x_offset)
 
     if angle_to_mid_deg < -35:
         return -35
@@ -193,7 +202,7 @@ def compute_steering_angle(lane_lines):
 
 
 def stabilize_steering_angle(curr_steering_angle, new_steering_angle, num_of_lane_lines,
-                             max_angle_deviation_two_lines=5, max_angle_deviation_one_lane=1):
+                             max_angle_deviation_two_lines=4, max_angle_deviation_one_lane=1):
     """
     Using last steering angle to stabilize the steering angle
     This can be improved to use last N angles, etc
@@ -218,7 +227,7 @@ def stabilize_steering_angle(curr_steering_angle, new_steering_angle, num_of_lan
 
 
 #################
-# test
+# test logic
 #################
 def angle_slope(line_segments):
     lane_lines = []
@@ -233,8 +242,8 @@ def angle_slope(line_segments):
     right_fit = []
 
     boundary = 1 / 3
-    left_region_boundary = width * (1 - boundary)  # left lane line segment should be on left 2/3 of the screen
-    right_region_boundary = width * boundary  # right lane line segment should be on left 2/3 of the screen
+    left_region_boundary = width * (1 - boundary)
+    right_region_boundary = width * boundary
 
     for line_segment in line_segments:
         for x1, y1, x2, y2 in line_segment:
@@ -264,7 +273,8 @@ def angle_slope(line_segments):
     else:
         angle_b = 0
 
-    angle_new = int((angle_b + angle_a) * -6/10)
+    angle_new = int((angle_b + angle_a) * -5/10)
+
     if angle_new < -35:
         return -35
     elif angle_new > 35:
@@ -272,6 +282,33 @@ def angle_slope(line_segments):
     else:
         return angle_new
 
+
+def angle_per_funtion(lane_lines):
+    width = 640
+    height = 480
+
+    if len(lane_lines) == 0:
+        return 0
+    if len(lane_lines) == 1:
+        x1, _, x2, _ = lane_lines[0][0]
+        x_offset = x2 - x1
+    else:
+        _, _, left_x2, _ = lane_lines[0][0]
+        _, _, right_x2, _ = lane_lines[1][0]
+
+        camera_mid_offset_percent = 0
+
+        mid = int(width / 2 * (1 + camera_mid_offset_percent))
+        x_offset = (left_x2 + right_x2) / 2 - mid
+
+    angle_to_mid_deg = -(x_offset**1/3)
+
+    if angle_to_mid_deg < -35:
+        return -35
+    elif angle_to_mid_deg > 35:
+        return 35
+    else:
+        return angle_to_mid_deg
 
 ############################
 # no logic
@@ -318,7 +355,6 @@ def make_points(line):
     # bound the coordinates within the frame
     x1 = max(-width, min(2 * width, int((y1 - intercept) / slope)))
     x2 = max(-width, min(2 * width, int((y2 - intercept) / slope)))
-    print(x1, y1, x2, y2)
 
     return [[x1, y1, x2, y2]]
 
@@ -339,7 +375,7 @@ def test_photo(file):
     lanes = average_slope_intercept(lines)
 
     steering_angle = compute_steering_angle(lanes)
-    # steering_angle = angle(lines)
+    # steering_angle = angle_slope(lines)
 
     lane_lines_img = display_lines(frame, lines)
     heading_line_img = display_heading_line(lane_lines_img, steering_angle, line_color=(0, 0, 255), line_width=5)
@@ -404,8 +440,6 @@ def test_video(video_file):
     # cap.set(4, 480)
     cap = cv2.VideoCapture(video_file)
 
-    current_steering_anglex = 0
-
     # skip first second of video.
     for i in range(3):
         _, frame = cap.read()
@@ -417,22 +451,24 @@ def test_video(video_file):
         while cap.isOpened():
             _, frame = cap.read()
             t1 = time.time()
-            color = detect_green(frame)
+
+            color = detect_color(frame, car.green_line)
             interest = region_of_interest(color)
             edge = detect_edge(interest)
             lines = detect_line(edge)
             lanes = average_slope_intercept(lines)
 
             new_steering_angle = compute_steering_angle(lanes)
-            # new_steering_angle = angle(lines)
-            print(new_steering_angle)
+            # new_steering_angle = angle_slope(lines)
+            # new_steering_angle = angle_per_funtion(lines)
 
-            stabilized_steering_angle = stabilize_steering_angle(current_steering_anglex,
+            stabilized_steering_angle = stabilize_steering_angle(car.current_steering_angle,
                                                                  new_steering_angle, len(lanes))
-            current_steering_anglex = stabilized_steering_angle
+            car.current_steering_angle = stabilized_steering_angle
+            print(new_steering_angle, stabilized_steering_angle)
 
             lane_lines_img = display_lines(frame, lines)
-            heading_line_img = display_heading_line(lane_lines_img, current_steering_anglex, line_color=(0, 0, 255),
+            heading_line_img = display_heading_line(lane_lines_img, car.current_steering_angle, line_color=(0, 0, 255),
                                                     line_width=5)
 
             # cv2.imwrite("%s_%03d_%03d.png" % (video_file, i, steering_angle), frame)
@@ -440,8 +476,7 @@ def test_video(video_file):
             video_overlay.write(heading_line_img)
             cv2.imshow("Road with Lane line", heading_line_img)
             t2 = time.time()
-            # print('frame %s in %d' % i)
-            # print(t2 - t1)
+
             # string_value = str(t2 - t1)
             # file.write(string_value + "\n")
 
@@ -459,4 +494,5 @@ def test_video(video_file):
 ############################
 if __name__ == '__main__':
     # test_photo('test_pic3/image_121_090.png')
+    car = PiCar()
     test_video('filename.avi')

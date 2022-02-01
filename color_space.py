@@ -2,7 +2,29 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 
-image = cv2.imread('test_pic/image_005_090.png')
+img = cv2.imread('test_pic3/image_005_090.png')
+green_line = np.array([[60, 160, 0], [80, 255, 255]])
+
+
+def detect_color(image, color_range):
+    x1, x2, x3 = color_range[0]
+    y1, y2, y3 = color_range[1]
+    lower_range = np.array([x1, x2 ,x3])
+    upper_range = np.array([y1, y2, y3])
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    return cv2.inRange(hsv, lower_range, upper_range)
+
+
+def test_photo(file):
+    frame = cv2.imread(file)
+    color = detect_color(frame, green_line)
+
+    cv2.imshow("Original", frame)
+    cv2.imshow("Color Filter", color)
+    cv2.imwrite('color_filter.jpg', color)
+
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 # b = image.copy()
 # # set green and red channels to 0
@@ -71,3 +93,9 @@ image = cv2.imread('test_pic/image_005_090.png')
 # cv2.imshow('Sobel-Laplace-Canny', slc)
 
 cv2.waitKey(0)
+
+
+if __name__ == '__main__':
+    # test_photo('test_pic3/image_121_090.png')
+    # car = PiCar()
+    test_photo('test_pic3/image_005_090.png')
