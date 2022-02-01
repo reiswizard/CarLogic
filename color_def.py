@@ -1,7 +1,8 @@
 import cv2
 import numpy as np
 
-cap = cv2.VideoCapture(0)
+# cap = cv2.VideoCapture(0)
+cap = cv2.imread('sd3.jpg')
 
 
 def nothing(x):
@@ -26,10 +27,12 @@ cv2.createTrackbar('v1', 'result', 0, 255, nothing)
 
 while 1:
 
-    _, frame = cap.read()
+    # _, frame = cap.read()
 
     # converting to HSV
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    # hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    frame = cap
+    hsv = cv2.cvtColor(cap, cv2.COLOR_BGR2HSV)
 
     # get info from track bar and appy to result
     h0 = cv2.getTrackbarPos('h0', 'result')

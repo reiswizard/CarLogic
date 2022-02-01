@@ -2,11 +2,44 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 
-img = cv2.imread('test_pic3/image_005_090.png')
-green_line = np.array([[60, 160, 0], [80, 255, 255]])
+image = cv2.imread('test_pic3/image_005_090.png')
+green_line = np.array([[60, 160, 50], [80, 255, 255]])
 
 
-def detect_color(image, color_range):
+def test_photo(file):
+    frame = cv2.imread(file)
+    color = detect_color(frame, green_line)
+    edge = detect_edge(frame)
+    contour = detect_contour(frame)
+
+    cv2.imshow("Original", frame)
+
+    cv2.imshow("Color Filter", color)
+    cv2.imwrite('color_filter.jpg', color)
+
+    cv2.imshow("Edge Filter", edge)
+    cv2.imwrite('edge_filter.jpg', edge)
+
+    cv2.imshow('shapes', contour)
+    cv2.imwrite('edge_filter.jpg', edge)
+
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+
+def detect_edge(img):
+    return cv2.Canny(img, 200, 400)
+
+
+def detect_contour(img):
+    img_gray = cv2.cvtColor(img, cv.COLOR_BGR2GRAY)
+    ret, thresh = cv2.threshold(img_gray, 127, 255, 0)
+    im2, contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    return cv2.drawContours(img, contours, -1, (0, 255, 0), 3)
+
+
+def detect_color(img, color_range):
     x1, x2, x3 = color_range[0]
     y1, y2, y3 = color_range[1]
     lower_range = np.array([x1, x2 ,x3])
@@ -15,16 +48,21 @@ def detect_color(image, color_range):
     return cv2.inRange(hsv, lower_range, upper_range)
 
 
-def test_photo(file):
-    frame = cv2.imread(file)
-    color = detect_color(frame, green_line)
+def region_of_interest(img):
+    height, width = img.shape
+    mask = np.zeros_like(img)
 
-    cv2.imshow("Original", frame)
-    cv2.imshow("Color Filter", color)
-    cv2.imwrite('color_filter.jpg', color)
+    # define the lane area
+    polygon = np.array([[
+        (0, height * 1/4),  # top left
+        (width, height * 1/4),  # top right
+        (width, height),  # bottom right
+        (0, height),  # bottom left
+    ]], np.int32)
+    cv2.fillPoly(mask, polygon, 255)
 
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    return cv2.bitwise_and(img, mask)
+
 
 # b = image.copy()
 # # set green and red channels to 0

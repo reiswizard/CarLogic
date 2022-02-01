@@ -18,12 +18,18 @@ class PiCar(object):
         self.speed = 0
 
         # line color green
-        self.green_line = np.array([[60, 160, 0], [80, 255, 255]])
+        self.green_line = np.array([[60, 160, 50], [80, 255, 255]])
         self.yellow_line = np.array([[20, 100, 100], [50, 255, 255]])
+        self.white_line = np.array([[0, 0, 170], [180, 190, 255]])
+
+    def drive(self, frame):
+        cap = cv2.VideoCapture(video_file)
+
+        return 0
 
 
 ############################
-# logic
+# logic actuel
 ############################
 # detection lane
 def detect_lane(img):
@@ -46,34 +52,72 @@ def detect_edge(img):
 
 
 # detect color
-def detect_color(img, color_range):
-    x1, x2, x3 = color_range[0]
-    y1, y2, y3 = color_range[1]
-    lower_range = np.array([x1, x2 ,x3])
-    upper_range = np.array([y1, y2, y3])
+def detect_color(img, color_range1, color_range2):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    return cv2.inRange(hsv, lower_range, upper_range)
+
+    # color range 1st
+    x1, x2, x3 = color_range1[0]
+    y1, y2, y3 = color_range1[1]
+    lower_range1 = np.array([x1, x2 ,x3])
+    upper_range1 = np.array([y1, y2, y3])
+
+    # color 2nd
+    v1, v2, v3 = color_range2[0]
+    w1, w2, w3 = color_range2[1]
+    lower_range2 = np.array([v1, v2, v3])
+    upper_range2 = np.array([w1, w2, w3])
+
+    # select priority color
+    mask1st = cv2.inRange(hsv, lower_range1, upper_range1)
+    mask_roi_l = r_o_i_l(mask1st)
+    mask_roi_r = r_o_i_r(mask1st)
+
+    mask2nd = cv2.inRange(hsv, lower_range2, upper_range2)
+    if np.sum(mask_roi_l == 255) < 500:
+        mask_roi_l = r_o_i_l(mask2nd)
+    if np.sum(mask_roi_r == 255) < 500:
+        mask_roi_r = r_o_i_r(mask2nd)
+
+    mask_white_green = cv2.bitwise_or(mask_roi_l, mask_roi_r)
+    end_mask = region_of_interest(mask_white_green)
+
+    return end_mask
 
 
-# def detect_green(img):
-#     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-#     # color to detect range and masking
-#     lower_green = np.array([60, 160, 0])
-#     upper_green = np.array([80, 255, 255])
-#
-#     return cv2.inRange(hsv, lower_green, upper_green)
-#
-#
-# def detect_yellow(img):
-#     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-#     # color to detect range and masking
-#     lower_yellow = np.array([20, 100, 100])
-#     upper_yellow = np.array([50, 255, 255])
-#
-#     return cv2.inRange(hsv, lower_yellow, upper_yellow)
+# take out zone of no interest left
+def r_o_i_l(img):
+    height, width = img.shape
+    mask = np.zeros_like(img)
+
+    # define the lane area
+    polygon = np.array([[
+        (0, height * 1/4),  # top left
+        (2/3*width, height * 1/4),  # top right
+        (2/3*width, height),  # bottom right
+        (0, height),  # bottom left
+    ]], np.int32)
+    cv2.fillPoly(mask, polygon, 255)
+
+    return cv2.bitwise_and(img, mask)
 
 
-# take out zone of no interest
+# take out zone of no interest right
+def r_o_i_r(img):
+    height, width = img.shape
+    mask = np.zeros_like(img)
+
+    # define the lane area
+    polygon = np.array([[
+        (2/3*width, height * 1/4),  # top left
+        (width, height * 1/4),  # top right
+        (width, height),  # bottom right
+        (2/3*width, height),  # bottom left
+    ]], np.int32)
+    cv2.fillPoly(mask, polygon, 255)
+
+    return cv2.bitwise_and(img, mask)
+
+# take out zone of no interest final
 def region_of_interest(img):
     height, width = img.shape
     mask = np.zeros_like(img)
@@ -229,7 +273,7 @@ def stabilize_steering_angle(curr_steering_angle, new_steering_angle, num_of_lan
 #################
 # test logic
 #################
-def angle_slope(line_segments):
+def steering_angle_slope(line_segments):
     lane_lines = []
     if line_segments is None:
         logging.info('No line_segment segments detected')
@@ -283,7 +327,7 @@ def angle_slope(line_segments):
         return angle_new
 
 
-def angle_per_funtion(lane_lines):
+def steering_angle_funtion(lane_lines):
     width = 640
     height = 480
 
@@ -309,6 +353,43 @@ def angle_per_funtion(lane_lines):
         return 35
     else:
         return angle_to_mid_deg
+
+
+#################
+# old logic
+#################
+# def detect_green(img):
+#     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+#     # color to detect range and masking
+#     lower_green = np.array([60, 160, 0])
+#     upper_green = np.array([80, 255, 255])
+#
+#     return cv2.inRange(hsv, lower_green, upper_green)
+#
+#
+# def detect_yellow(img):
+#     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+#     # color to detect range and masking
+#     lower_yellow = np.array([20, 100, 100])
+#     upper_yellow = np.array([50, 255, 255])
+#
+#     return cv2.inRange(hsv, lower_yellow, upper_yellow)
+#
+#
+# def region_of_interest(img):
+#     height, width = img.shape
+#     mask = np.zeros_like(img)
+#
+#     # define the lane area
+#     polygon = np.array([[
+#         (0, height * 1/4),  # top left
+#         (width, height * 1/4),  # top right
+#         (width, height),  # bottom right
+#         (0, height),  # bottom left
+#     ]], np.int32)
+#     cv2.fillPoly(mask, polygon, 255)
+#
+#     return cv2.bitwise_and(img, mask)
 
 ############################
 # no logic
@@ -352,7 +433,7 @@ def make_points(line):
     y1 = height  # bottom of the frame
     y2 = int(y1 * 1 / 2)  # make points from middle of the frame down
 
-    # bound the coordinates within the frame
+    # bound the coordinates within the frame using line equalation
     x1 = max(-width, min(2 * width, int((y1 - intercept) / slope)))
     x2 = max(-width, min(2 * width, int((y2 - intercept) / slope)))
 
@@ -452,7 +533,7 @@ def test_video(video_file):
             _, frame = cap.read()
             t1 = time.time()
 
-            color = detect_color(frame, car.green_line)
+            color = detect_color(frame, car.white_line, car.green_line)
             interest = region_of_interest(color)
             edge = detect_edge(interest)
             lines = detect_line(edge)
@@ -477,8 +558,8 @@ def test_video(video_file):
             cv2.imshow("Road with Lane line", heading_line_img)
             t2 = time.time()
 
-            # string_value = str(t2 - t1)
-            # file.write(string_value + "\n")
+            string_value = str(t2 - t1)
+            file.write(string_value + "\n")
 
             i += 1
             if cv2.waitKey(1) & 0xFF == ord('q'):
