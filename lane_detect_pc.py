@@ -37,19 +37,14 @@ def drive(video_file):
             t1 = time.time()
 
             ######################
-            # start image proccesing, roi is region of interest
+            # start image processing, roi is region of interest
             ######################
             color_in_roi = detect_color_in_roi(frame, car.green_line, car.white_line)
             edge = detect_edge(color_in_roi)
             lines_segments_in_roi = detect_line(edge)
             lanes_in_roi = average_slope_intercept(lines_segments_in_roi)
             ######################
-            # end imgage processing
-
-            # test
-            # new_steering_angle = steering_angle_nearest_edge(color_in_roi, lines_segments_in_roi)
-            # car.current_steering_angle = new_steering_angle
-            # print(new_steering_angle)
+            # end image processing
 
             ######################
             # determine car axis angle
