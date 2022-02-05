@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 # cap = cv2.VideoCapture(0)
-cap = cv2.imread('ori.jpg')
+cap = cv2.imread('test_pic/image_300_090.png')
 
 
 def nothing(x):

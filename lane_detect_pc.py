@@ -1,16 +1,48 @@
 import cv2
-import numpy
+import matplotlib.pyplot as plt
 import numpy as np
 import math
 import logging
 import time
 import datetime
-import sys
 
+# import sys
+# sys.path.append(r'/home/pi/picar-x/lib')
+# from picarx import Picarx
 
 _SHOW_IMAGE = False
 
 
+# class CarControl(object):
+#     car_control = Picarx()
+#
+#     def car_camera_angle1(self, angle):
+#         self.set_camera_servo1_angle(angle)
+#
+#     def car_camera_angle2(self, angle):
+#         self.set_camera_servo2_angle(angle)
+#
+#     def car_dir_angle(self, angle, speed):
+#         self.set_dir_servo_angle(angle)
+#         self.forward(speed)
+
+
+class PiCar(object):
+    def __init__(self, car=None):
+        logging.info('Creating a HandCodedLaneFollower...')
+        self.car = car
+        self.current_steering_angle = 0
+        self.speed = 0
+
+        # line color green
+        self.green_line = np.array([[60, 70, 50], [100, 255, 255]])
+        self.yellow_line = np.array([[30, 70, 140], [50, 255, 255]])
+        self.white_line = np.array([[0, 0, 140], [115, 40, 255]])
+
+
+#####################
+# drive mechanic
+#####################
 def drive(video_file):
     ######
     # function for tracking
@@ -30,7 +62,7 @@ def drive(video_file):
     video_overlay = cv2.VideoWriter("%s_overlay.avi" % video_file, video_type, 30, (640, 480))
 
     try:
-        i= 0
+        i = 0
         while cap.isOpened():
             _, frame = cap.read()
             # for performance recording
@@ -39,9 +71,9 @@ def drive(video_file):
             ######################
             # start image processing, roi is region of interest
             ######################
-            color_in_roi = detect_color_in_roi(frame, car.green_line, car.white_line)
-            edge = detect_edge(color_in_roi)
-            lines_segments_in_roi = detect_line(edge)
+            color_in_roi = detect_color_in_roi(frame, car.yellow_line, car.green_line)
+            edge_in_roi = detect_edge(color_in_roi)
+            lines_segments_in_roi = detect_line(edge_in_roi)
             lanes_in_roi = average_slope_intercept(lines_segments_in_roi)
             ######################
             # end image processing
@@ -49,7 +81,7 @@ def drive(video_file):
             ######################
             # determine car axis angle
             ######################
-            new_steering_angle = compute_steering_angle(lanes_in_roi) + 1
+            new_steering_angle = compute_steering_angle(lanes_in_roi)
             stabilized_steering_angle = stabilize_steering_angle(car.current_steering_angle,
                                                                  new_steering_angle, len(lanes_in_roi))
             car.current_steering_angle = stabilized_steering_angle
@@ -57,13 +89,21 @@ def drive(video_file):
             # end angle
             ######################
 
+            ######################
+            # test
+            ######################
+            left_lane_x, right_lane_x, test_angle = compute_lanes(color_in_roi)
+            lane_img = display_lanes(frame, left_lane_x, right_lane_x)
+            cv2.imshow("Lane to Detect", lane_img)
+            print(new_steering_angle, test_angle)
+
             # end processing time
             t2 = time.time()
 
             ######################
             # car control
             ######################
-            if lanes_in_roi == 0:
+            if len(lanes_in_roi) == 0:
                 car.speed = 0
                 # stop car
                 # forward(0)
@@ -74,7 +114,7 @@ def drive(video_file):
 
             # visualization part begin
             cv2.imshow("Color Filtered", color_in_roi)
-            cv2.imshow("Edge Detection", edge)
+            cv2.imshow("Edge Detection", edge_in_roi)
             lane_lines_img = display_lines(frame, lines_segments_in_roi)
             heading_line_img = display_heading_line(lane_lines_img, car.current_steering_angle,
                                                     line_color=(0, 0, 255),
@@ -84,7 +124,7 @@ def drive(video_file):
             string_value_time = str(t2 - t1)
             string_angle = str(new_steering_angle)
             string_lanes = str(lanes_in_roi)
-            print(string_value_time + ", " + string_angle + " Grad, Punkten " + string_lanes)
+            print(string_value_time + ", " + string_angle + " Grad")
             # file.write(string_value_time +", " + string_angle + " Grad, offset Center " + string_offset + "\n")
             i += 1
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -99,19 +139,6 @@ def drive(video_file):
         video_overlay.release()
         cv2.destroyAllWindows()
     # return 0
-
-
-class PiCar(object):
-    def __init__(self, car=None):
-        logging.info('Creating a HandCodedLaneFollower...')
-        self.car = car
-        self.current_steering_angle = 0
-        self.speed = 0
-
-        # line color green
-        self.green_line = np.array([[60, 160, 50], [80, 255, 255]])
-        self.yellow_line = np.array([[20, 100, 100], [50, 255, 255]])
-        self.white_line = np.array([[0, 0, 170], [180, 190, 255]])
 
 
 ############################
@@ -154,16 +181,16 @@ def detect_color_in_roi(img, color_range1, color_range2, min_detected_color=1000
 
 
 # take out zone of no interest left
-def roi_l(img):
+def roi_l(img, width_sliding=0):
     height, width = img.shape
     mask = np.zeros_like(img)
 
     # define the lane area
     polygon = np.array([[
-        (0, height * 1/4),  # top left
-        (1/2*width, height * 1/4),  # top right
-        (1/2*width, height * 3/4),  # bottom right
-        (0, height * 3/4),  # bottom left
+        (0, height * 1 / 4),  # top left
+        ((1 / 2 * width - width_sliding), height * 1 / 4),  # top right
+        ((1 / 2 * width - width_sliding), height * 3 / 4),  # bottom right
+        (0, height * 3 / 4),  # bottom left
     ]], np.int32)
     cv2.fillPoly(mask, polygon, 255)
 
@@ -171,32 +198,49 @@ def roi_l(img):
 
 
 # take out zone of no interest right
-def roi_r(img):
+def roi_r(img, width_sliding=0):
     height, width = img.shape
     mask = np.zeros_like(img)
 
     # define the lane area
     polygon = np.array([[
-        (1/2*width, height * 1/4),  # top left
-        (width, height * 1/4),  # top right
-        (width, height * 3/4),  # bottom right
-        (1/2*width, height * 3/4),  # bottom left
+        ((1 / 2 * width + width_sliding), height * 1 / 4),  # top left
+        (width, height * 1 / 4),  # top right
+        (width, height * 3 / 4),  # bottom right
+        ((1 / 2 * width + width_sliding), height * 3 / 4),  # bottom left
     ]], np.int32)
     cv2.fillPoly(mask, polygon, 255)
 
     return cv2.bitwise_and(img, mask)
 
+
 # take out zone of no interest final
-def region_of_interest(img):
+def region_of_interest(img, height_sliding=0):
     height, width = img.shape
     mask = np.zeros_like(img)
 
     # define the lane area
     polygon = np.array([[
-        (0, height * 1/4),  # top left
-        (width, height * 1/4),  # top right
-        (width, height),  # bottom right
-        (0, height),  # bottom left
+        (0, height * 1 / 4 + height_sliding),  # top left
+        (width, height * 1 / 4 + height_sliding),  # top right
+        (width, height * 3 / 4 + height_sliding),  # bottom right
+        (0, height * 3 / 4 + height_sliding),  # bottom left
+    ]], np.int32)
+    cv2.fillPoly(mask, polygon, 255)
+
+    return cv2.bitwise_and(img, mask)
+
+
+def sliding_window(img, height_start=480, height_sliding=1):
+    height, width = img.shape
+    mask = np.zeros_like(img)
+
+    # define the lane area
+    polygon = np.array([[
+        (0, height_start + height_sliding),  # top left
+        (width, height_start + height_sliding),  # top right
+        (width, height_start),  # bottom right
+        (0, height_start),  # bottom left
     ]], np.int32)
     cv2.fillPoly(mask, polygon, 255)
 
@@ -303,15 +347,15 @@ def compute_steering_angle(lane_lines):
     # y-achse entending
     # a little tweaking for more stability, because the camera is very near the lane
     # in normal calculating 1/2 like the chosen parameter in make points is the correct points
-    y_offset = int(height * 3/2)
+    y_offset = int(height * 3 / 2)
 
     angle_to_mid_radian = math.atan(x_offset / y_offset)  # angle (in radian) to center vertical line
     angle_to_mid_deg = int(math.degrees(angle_to_mid_radian))
 
-    if angle_to_mid_deg < -35:
-        return -35
-    elif angle_to_mid_deg > 35:
-        return 35
+    if angle_to_mid_deg < -25:
+        return -25
+    elif angle_to_mid_deg > 25:
+        return 25
     else:
         return angle_to_mid_deg
 
@@ -341,101 +385,58 @@ def stabilize_steering_angle(curr_steering_angle, new_steering_angle, num_of_lan
 #################
 #################
 # nearest zero
-def find_nearest_white(img, target=(320, 240)):
-    nonzero = cv2.findNonZero(img)
-    distances = np.sqrt((nonzero[:,:,0] - target[0]) ** 2 + (nonzero[:,:,1] - target[1]) ** 2)
-    nearest_index = np.argmin(distances)
-    return nonzero[nearest_index]
+def compute_lanes(color_filtered_in_roi, min_detected_color=500):
+    lanes = 0
+    left_lane = []
+    right_lane = []
+    plot_y = np.array([float(x) for x in range(360, 120, -5)])
 
-# calculating the angle from the detected lines segments with tangens function
-# to strong fluctuation for use
-def steering_angle_slope(line_segments):
-    lane_lines = []
-    if line_segments is None:
-        return 0
+    detected_color = np.sum(color_filtered_in_roi == 255)
 
-    width = 640
-    height = 480
+    if detected_color > min_detected_color:
+        i = 360
+        while i > 120:
+            hist_img = sliding_window(color_filtered_in_roi, i, 5)
+            hist = np.sum(hist_img, axis=0)
+            max_left = np.nanargmax(hist[0:320])
+            max_right = np.nanargmax(hist[320:640]) + 320
 
-    left_fit = []
-    right_fit = []
+            # max_left = np.average(np.nonzero(hist[0:320]))
+            # max_right = np.average(np.nonzero(hist[320:640])) + 320
 
-    boundary = 1 / 3
-    left_region_boundary = width * (1 - boundary)
-    right_region_boundary = width * boundary
-
-    for line_segment in line_segments:
-        for x1, y1, x2, y2 in line_segment:
-            if x1 == x2:
-                continue
-            fit = np.polyfit((x1, x2), (y1, y2), 1)
-            slope = fit[0]
-            intercept = fit[1]
-            if slope < 0:
-                if x1 < left_region_boundary and x2 < left_region_boundary:
-                    left_fit.append((slope, intercept))
-            else:
-                if x1 > right_region_boundary and x2 > right_region_boundary:
-                    right_fit.append((slope, intercept))
-
-    left_fit_average = np.average(left_fit, axis=0)
-    if len(left_fit) > 0:
-        angle_a = math.degrees(math.atan(left_fit_average[0]))
+            if 1 < max_left < 319:
+                left_lane.append((max_left, i))
+            if 320 < max_right < 639:
+                right_lane.append((max_right, i))
+            i -= 5
     else:
-        angle_a = 0
+        return left_lane, right_lane, 0
 
-    right_fit_average = np.average(right_fit, axis=0)
-
-    if len(right_fit) > 0:
-        angle_b = math.degrees(math.atan(right_fit_average[0]))
+    if len(left_lane) > 0:
+        x_coords_left = np.array(left_lane)[:, 0]
+        y_coords_left = np.array(left_lane)[:, 1]
+        left_fit = np.polynomial.polynomial.polyfit(y_coords_left, x_coords_left, 2)
+        left_fit_x = left_fit[2] * plot_y ** 2 + left_fit[1] * plot_y + left_fit[0]
+        left_lane = np.array((left_fit_x, plot_y)).T
+        x1 = left_lane[-1][0]
     else:
-        angle_b = 0
+        x1 = 0
 
-    angle_new = int((angle_b + angle_a) * -1/2)
-
-    if angle_new < -35:
-        return -35
-    elif angle_new > 35:
-        return 35
+    if len(right_lane) > 0:
+        x_coord_right = np.array(right_lane)[:, 0]
+        y_coords_right = np.array(right_lane)[:, 1]
+        right_fit = np.polynomial.polynomial.polyfit(y_coords_right, x_coord_right, 2)
+        right_fit_x = right_fit[2] * plot_y ** 2 + right_fit[1] * plot_y + right_fit[0]
+        right_lane = np.array((right_fit_x, plot_y)).T
+        x2 = right_lane[-1][0]
     else:
-        return angle_new
+        x2 = 640
 
-# only aceptabel for straight forward or little curve
-def steering_angle_nearest_edge(img, line_segments):
-    lane_lines = []
-    if line_segments is None:
-        return 0
-
-    width = 640
-    height = 480
-
-    if np.sum(roi_l(img) == 255) > 1000:
-        roi_on_l = roi_l(img)
-        neares_white_l = find_nearest_white(roi_on_l)
-        x1_offset = neares_white_l[0][0]
-        print(neares_white_l)
-    else:
-        x1_offset = 0
-    if np.sum(roi_r(img) == 255) > 1000:
-        roi_o_r = roi_r(img)
-        neares_white_r = find_nearest_white(roi_o_r)
-        x2_offset = neares_white_r[0][0]
-        print(neares_white_r)
-    else:
-        x2_offset = 640
-
-    x2_offset_center = (x1_offset+x2_offset) / 2 - 320
-    y_offset = int(height * 1 / 2)
-
-    angle_to_mid_radian = math.atan(x2_offset_center / y_offset)
+    x_offset = (x1 + x2) / 2 - 320
+    angle_to_mid_radian = math.atan(x_offset / 480)
     angle_to_mid_deg = int(math.degrees(angle_to_mid_radian))
 
-    if angle_to_mid_deg < -35:
-        return -35
-    elif angle_to_mid_deg > 35:
-        return 35
-    else:
-        return angle_to_mid_deg
+    return left_lane, right_lane, angle_to_mid_deg
 
 
 #################
@@ -474,8 +475,7 @@ def steering_angle_nearest_edge(img, line_segments):
 # def length_of_line_segment(line):
 #     x1, y1, x2, y2 = line
 #     return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-#
-#
+
 ############################
 # no logic
 ############################
@@ -484,7 +484,7 @@ def show_image(title, img, show=_SHOW_IMAGE):
         cv2.imshow(title, img)
 
 
-def display_lines(frame, lines, line_color=(255, 0, 0), line_width=5):
+def display_lines(frame, lines, line_color=(0, 0, 255), line_width=5):
     line_image = np.zeros_like(frame)
     if lines is not None:
         for line in lines:
@@ -511,75 +511,62 @@ def display_heading_line(img, steering_angle, line_color=(255, 0, 0), line_width
     return heading_image
 
 
+def display_lanes(img, lane_left, lane_right):
+    i = 0
+    while i < len(lane_left) - 1:
+        cv2.line(img, (int(lane_left[i][0]), int(lane_left[i][1])),
+                 (int(lane_left[i + 1][0]), int(lane_left[i + 1][1])),
+                 (0, 0, 255), 2)
+        i += 1
+
+    i = 0
+    while i < len(lane_right) - 1:
+        cv2.line(img, (int(lane_right[i][0]), int(lane_right[i][1])),
+                 (int(lane_right[i + 1][0]), int(lane_right[i + 1][1])),
+                 (0, 0, 255),
+                 2)
+        i += 1
+
+    return img
+
+
 ############################
-# Test Functions old must rework
+# Test Function
 ############################
 def test_photo(file):
-    t1 = time.time()
+    image = cv2.imread(file)
+    # image processing
+    color_in_roi = detect_color_in_roi(image, car.yellow_line, car.green_line)
+    edge_in_roi = detect_edge(color_in_roi)
+    lines_segments_in_roi = detect_line(edge_in_roi)
+    lanes_in_roi = average_slope_intercept(lines_segments_in_roi)
 
-    frame = cv2.imread(file)
-    color = detect_green(frame)
-    interest = region_of_interest(color)
-    number_of_white_pix = np.sum(interest == 255)
+    # determine car axis angle
+    steering_angle = compute_steering_angle(lanes_in_roi)
 
-    edge = detect_edge(interest)
-    lines = detect_line(edge)
-    lanes = average_slope_intercept(lines)
-
-    steering_angle = compute_steering_angle(lanes)
-    # steering_angle = angle_slope(lines)
-
-    lane_lines_img = display_lines(frame, lines)
+    lane_lines_img = display_lines(image, lines_segments_in_roi)
     heading_line_img = display_heading_line(lane_lines_img, steering_angle, line_color=(0, 0, 255), line_width=5)
 
-    #########################
-    # if np.sum(interest == 255) > 1000:
-    #     edge = detect_edge(interest)
-    #     lines = detect_line(edge)
-    #     lanes = average_slope_intercept(lines)
-    #
-    #     steering_angle = compute_steering_angle(lanes)
-    #
-    #     lane_lines_img = display_lines(frame, lines)
-    #     heading_line_img = display_heading_line(lane_lines_img, steering_angle, line_color=(0, 0, 255), line_width=5)
-    # else:
-    #     color = detect_green(frame)
-    #     interest = region_of_interest(color)
-    #     number_of_white_pix = np.sum(interest == 255)
-    #     edge = detect_edge(interest)
-    #     lines = detect_line(edge)
-    #     lanes = average_slope_intercept(lines)
-    #
-    #     steering_angle = compute_steering_angle(lanes)
-    #
-    #     lane_lines_img = display_lines(frame, lines)
-    #     heading_line_img = display_heading_line(lane_lines_img, steering_angle, line_color=(255, 0, 0), line_width=5)
-    #     print('none')
+    # drawing roi
+    img_roi = cv2.rectangle(lane_lines_img, (2, 120), (638, 360), (255, 0, 0), 3)
+    img_roi = cv2.line(img_roi, (319, 120), (319, 360), (255, 0, 0), 3)
+    cv2.imshow("Region of Interest", img_roi)
+    cv2.imwrite('region of Interest.jpg', img_roi)
 
-    ##########################
-    # lanes = average_slope_intercept(detect_line(detect_edge(region_of_interest(detect_green(cv2.imread(file))))))
-    # steering_angle = compute_steering_angle(lanes)
+    # Histogram
+    # pixel in colum
+    left_lane_x, right_lane_x, test_angle = compute_lanes(color_in_roi)
+    lane_img = display_lanes(image, left_lane_x, right_lane_x)
+    print(steering_angle, test_angle)
 
-    # lane_lines_img = display_lines(frame, lines)
-    # heading_line_img = display_heading_line(lane_lines_img, steering_angle, line_color=(0, 0, 255), line_width=5)
-
-    show_image('Original', frame, True)
-    show_image('Color Selection', color, True)
-    show_image('Interest', interest, True)
-    show_image('Edge', edge, True)
+    show_image('Original', image, True)
+    show_image('Color Selection', color_in_roi, True)
+    show_image('Edge', edge_in_roi, True)
     cv2.imshow("Lane Lines", lane_lines_img)
     cv2.imshow("Heading", heading_line_img)
-
-    t2 = time.time()
-    # print(t2 - t1)
-    # print(lines)
-    # print(number_of_white_pix)
-    # print(lanes)
-    # print(steering_angle)
-
-    # hori = np.concatenate((frame, interest), axis=1)
-    # cv2.imwrite('ori.jpg', frame)
-    # cv2.imwrite('interest.jpg', interest)
+    cv2.imwrite('Line Detected.jpg', lane_img)
+    cv2.imwrite('Color selection.jpg', color_in_roi)
+    cv2.imwrite('Edge selection.jpg', edge_in_roi)
 
     cv2.waitKey(0)
     cv2.destroyAllWindows()
@@ -646,7 +633,8 @@ def test_video(video_file):
 # test main
 ############################
 if __name__ == '__main__':
-    # test_photo('test_pic3/image_121_090.png')
-    # test_video('filename.avi')
     car = PiCar('PiCar')
     drive('filename.avi')
+    # test_photo('test_pic/image_300_090.png')
+    # test_photo('ori.jpg')
+    # test_video('filename.avi')
