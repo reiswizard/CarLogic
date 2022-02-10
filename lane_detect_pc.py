@@ -22,7 +22,7 @@ _SHOW_IMAGE = False
 #     def car_camera_angle2(self, angle):
 #         self.set_camera_servo2_angle(angle)
 #
-#     def car_dir_angle(self, angle, speed):
+#     def car_control(self, angle, speed):
 #         self.set_dir_servo_angle(angle)
 #         self.forward(speed)
 
@@ -36,7 +36,7 @@ class PiCar(object):
 
         # line color green
         self.green_line = np.array([[60, 70, 50], [100, 255, 255]])
-        self.yellow_line = np.array([[30, 70, 140], [50, 255, 255]])
+        self.yellow_line = np.array([[30, 60, 150], [50, 255, 255]])
         self.white_line = np.array([[0, 0, 140], [115, 40, 255]])
 
 
